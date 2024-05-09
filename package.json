@@ -11,7 +11,7 @@
 		"test": "npm run tests-only && npm run test:harmony",
 		"posttest": "npx aud --production",
 		"tests-only": "nyc tape test",
-		"test:harmony": "nyc node --es-staging --harmony test",
+		"test:harmony": "nyc node --harmony test",
 		"lint": "eslint ."
 	},
 	"repository": {

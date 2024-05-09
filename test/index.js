@@ -349,5 +349,15 @@ test('corner cases', function (t) {
 		'() => {}'() {}
 	})['() => {}']));
 
+	t.ok(isArrowFunction(/* function */x => { }));
+	t.ok(isArrowFunction(x/* function */ => { }));
+	t.ok(isArrowFunction(/* function */() => { }));
+	t.ok(isArrowFunction(()/* function */ => { }));
+	t.ok(isArrowFunction((/* function */) => {}));
+
+	t.notOk(isArrowFunction(function/* => */() { }));
+	t.notOk(isArrowFunction(function name/* => */() { }));
+	t.notOk(isArrowFunction(function/* => */name() { }));
+
 	t.end();
 });

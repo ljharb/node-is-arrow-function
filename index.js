@@ -4,6 +4,10 @@
 var found = function (n) {
 	return n !== -1;
 };
+/** @param {number} n */
+var notFoundGoesLast = function (n) {
+	return found(n) ? n : Infinity;
+};
 
 /** @param {unknown} fn */
 module.exports = function isArrowFunction(fn) {
@@ -23,30 +27,31 @@ module.exports = function isArrowFunction(fn) {
 	var paren = fnStr.indexOf('(');
 	var brace = fnStr.indexOf('{');
 	var arrow = fnStr.indexOf('=>');
+	var slash = fnStr.indexOf('/');
 
-	if (classRe.test(fnStr)) {
+	if (!found(firstNonSpace) || !found(arrow) || classRe.test(fnStr)) {
 		return false;
 	}
-	if (!found(arrow) || !found(firstNonSpace)) {
-		return false;
-	}
-	if (!found(brace) || !found(paren)) {
+	if (!found(brace) || !found(paren) || paren === firstNonSpace) {
 		return true;
 	}
 	if (found(quote) && quote === firstNonSpace) {
 		return false;
 	}
-	if (paren === firstNonSpace) {
-		return true;
-	}
-	if (Math.min(arrow, brace, paren) === arrow) {
+
+	var firstPunct = [
+		arrow,
+		brace,
+		paren,
+		slash
+	].map(notFoundGoesLast).sort(function (a, b) {
+		return a - b;
+	})[0];
+
+	if (firstPunct === arrow) {
 		return true;
 	}
 
 	var beforeParams = fnStr.slice(0, paren).replace(stripRe, '');
-	if (beforeParams && beforeParams !== 'async') {
-		return false;
-	}
-
-	return paren < arrow && arrow < brace;
+	return !beforeParams || beforeParams === 'async';
 };
