@@ -1,22 +1,16 @@
 'use strict';
 
-/** @param {number} n */
-var found = function (n) {
-	return n !== -1;
-};
-/** @param {number} n */
-var notFoundGoesLast = function (n) {
-	return found(n) ? n : Infinity;
-};
+var isCallable = require('is-callable');
+var fnToStr = Function.prototype.toString;
 
 /** @param {unknown} fn */
 module.exports = function isArrowFunction(fn) {
-	if (typeof fn !== 'function') {
+	if (!isCallable(fn)) {
 		return false;
 	}
 
 	/** @type {string} */
-	var fnStr = Function.prototype.toString.call(fn);
+	var fnStr = fnToStr.call(fn);
 
 	var classRe = /^\s*class[\s/{]/;
 	var stripRe = /^\s+|\s+$/g;
@@ -29,26 +23,26 @@ module.exports = function isArrowFunction(fn) {
 	var arrow = fnStr.indexOf('=>');
 	var slash = fnStr.indexOf('/');
 
-	if (!found(firstNonSpace) || !found(arrow) || classRe.test(fnStr)) {
+	if (firstNonSpace === -1 || arrow === -1 || classRe.test(fnStr)) {
 		return false;
 	}
-	if (!found(brace) || !found(paren) || paren === firstNonSpace) {
+	if (brace === -1 || paren === -1 || paren === firstNonSpace) {
 		return true;
 	}
-	if (found(quote) && quote === firstNonSpace) {
+	if (quote !== -1 && quote === firstNonSpace) {
 		return false;
 	}
 
-	var firstPunct = [
-		arrow,
-		brace,
-		paren,
-		slash
-	].map(notFoundGoesLast).sort(function (a, b) {
+	var puncts = [
+		arrow, brace, paren, slash
+	];
+	for (var i = 0; i < puncts.length; ++i) {
+		puncts[i] = puncts[i] === -1 ? Infinity : puncts[i];
+	}
+	puncts.sort(function (a, b) {
 		return a - b;
-	})[0];
-
-	if (firstPunct === arrow) {
+	});
+	if (puncts[0] === arrow) {
 		return true;
 	}
 
