@@ -1,52 +1,48 @@
+// @ts-check
+
 'use strict';
 
 var test = require('tape');
 var isArrowFunction = require('../index');
 var forEach = require('for-each');
+var f = require('./fixtures');
+var fixtures = f.fixtures;
+var helpers = f.helpers;
 
-var isModernishNodeEnv = function () {
-	if (typeof process === 'object' && process.versions && process.versions.node) {
-		var major = process.versions.node.match(/^\d+/);
-		// eslint-disable-next-line no-magic-numbers
-		return major && Number(major[0]) >= 12;
-	}
+/**
+ * @typedef {{
+ * 	when: string
+ * 	expect: boolean
+ * 	items: unknown[]
+ * }} TestConfig
+ */
 
-	return false;
-};
+/**
+ * @param {TestConfig} config
+ */
+var testItems = function (config) {
+	var when = config.when;
+	var expect = config.expect;
+	var items = config.items;
 
-var IS_MODERNISH_NODE_ENV = isModernishNodeEnv();
-
-var getFromSource = function (objOrSource) {
-	if (typeof objOrSource !== 'string') {
-		return objOrSource;
-	}
-
-	try {
-		// eslint-disable-next-line no-new-func
-		return new Function('return (' + objOrSource + ')')();
-	} catch (e) {
-		if (IS_MODERNISH_NODE_ENV) {
-			// anything we pass to this function should be valid syntax as of modern node versions
-			throw e;
+	test('returns ' + expect + ' when ' + when, function (t) {
+		if (items.length === 0) {
+			t.skip();
+			t.end();
+			return;
 		}
-		// if invalid syntax in older versions, we simply ignore them
-		return null;
-	}
+		t.plan(items.length);
+		forEach(items, function (item) {
+			t[expect ? 'ok' : 'notOk'](isArrowFunction(item), String(item) + ' is ' + when);
+		});
+		t.end();
+	});
 };
 
-var getAllFromSource = function (obj) {
-	var objs = [];
-	for (var i = 0; i < obj.length; ++i) {
-		var fn = getFromSource(obj[i]);
-		if (fn) {
-			objs.push(fn);
-		}
-	}
-	return objs;
-};
-
-test('returns false for non-functions', function (t) {
-	var nonFuncs = [
+testItems({
+	when: 'not a function',
+	expect: false,
+	items: [
 		true,
 		false,
 		null,
@@ -60,65 +56,45 @@ test('returns false for non-functions', function (t) {
 		// eslint-disable-next-line no-magic-numbers
 		42,
 		new Date(0)
-	];
-
-	t.plan(nonFuncs.length);
-	forEach(nonFuncs, function (nonFunc) {
-		t.notOk(isArrowFunction(nonFunc), nonFunc + ' is not a function');
-	});
-	t.end();
+	]
 });
 
-test('returns false for non-arrow functions', function (t) {
-	var fns = getAllFromSource([
-		function () {},
-		function foo() {},
-		function foo() { '=>'; },
-		'function foo() { () => {} }'
-	]);
+testItems({ when: 'not an arrow function', expect: false, items: fixtures.syncNonArrowFunctions });
+testItems({ when: 'arrow function', expect: true, items: fixtures.syncArrowFunctions });
+testItems({ when: 'async arrow function', expect: true, items: fixtures.asyncArrowFunctions });
+testItems({ when: 'async non-arrow function', expect: false, items: fixtures.asyncNonArrowFunctions });
+testItems({ when: 'generator function', expect: false, items: fixtures.syncGeneratorFunctions });
+testItems({ when: 'async generator function', expect: false, items: fixtures.asyncGeneratorFunctions });
+testItems({ when: 'method', expect: false, items: fixtures.syncMethods });
+testItems({ when: 'async method', expect: false, items: fixtures.asyncMethods });
+testItems({ when: 'generator method', expect: false, items: fixtures.syncGeneratorMethods });
+testItems({ when: 'async generator method', expect: false, items: fixtures.asyncGeneratorMethods });
+testItems({ when: 'class', expect: false, items: fixtures.classes });
 
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is not an arrow function');
-	});
-	t.end();
-});
-
-test('returns false for built-ins', function (t) {
-	var fns = [
+testItems({
+	when: 'built-in',
+	expect: false,
+	items: [
 		setTimeout,
 		Date,
 		Date.now,
 		// eslint-disable-next-line no-eval
 		eval
-	];
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is a built-in');
-	});
-
-	t.end();
+	]
 });
 
-test('returns false for alert', function (t) {
+testItems({
+	when: 'alert',
+	expect: false,
 	/* global alert */
-	if (typeof alert === 'function') {
-		t.notOk(isArrowFunction(alert));
-	} else {
-		t.skip();
-	}
-	t.end();
+	items: typeof alert === 'function' ? [alert] : []
 });
 
-test('returns false for document.all', function (t) {
+testItems({
+	when: 'document.all',
+	expect: false,
 	/* global document */
-	if (typeof document === 'undefined') {
-		t.skip();
-	} else {
-		t.notOk(isArrowFunction(document.all));
-	}
-	t.end();
+	items: typeof document === 'undefined' ? [] : [document.all]
 });
 
 test('returns false for non-arrow function with faked toString', function (t) {
@@ -131,7 +107,7 @@ test('returns false for non-arrow function with faked toString', function (t) {
 });
 
 test('returns true for arrow function with faked toString', function (t) {
-	var func = getFromSource('() => {}');
+	var func = helpers.parseFromSource('() => {}');
 	if (!func) {
 		t.skip();
 		t.end();
@@ -145,157 +121,9 @@ test('returns true for arrow function with faked toString', function (t) {
 	t.end();
 });
 
-test('returns true for arrow functions', function (t) {
-	var fns = getAllFromSource([
-		'(a, b) => a * b',
-		'() => 42',
-		'() => function () {}',
-		'() => x => x * x',
-		'y => x => x * x',
-		'x => x * x',
-		'x => { return x * x; }',
-		'(x, y) => { return x + x; }',
-		'(a = Math.random(10)) => {}',
-		'(a = function () {\n			if (Math.random() < 0.5) { return 42; }\n			return "something else";\n}) => a()'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.ok(isArrowFunction(fn), String(fn) + ' is arrow function');
-	});
-	t.end();
-});
-
-test('returns true for async arrow functions', function (t) {
-	var fns = getAllFromSource([
-		'async (a, b) => a * b',
-		'async x => {}',
-		'async () => {}',
-		'async () => { function f() {} }'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.ok(isArrowFunction(fn), String(fn) + ' is async arrow function');
-	});
-	t.end();
-});
-
-test('returns false for async non-arrow functions', function (t) {
-	var fns = getAllFromSource([
-		'async function () {}',
-		'async function foo() {}',
-		'async function () { "=>" }',
-		'async function foo() { "=>" }'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is async non-arrow function');
-	});
-	t.end();
-});
-
-test('returns false for generator functions', function (t) {
-	var fns = getAllFromSource([
-		'function* () { var x = yield; return x || 42; }',
-		'function* gen() { var x = yield; return x || 42; }',
-		'({ *       concise() { var x = yield; return x || 42; } }).concise'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is async non-arrow function');
-	});
-	t.end();
-});
-
-test('returns false for async generator functions', function (t) {
-	var fns = getAllFromSource([
-		'async function* () {}',
-		'async function* () { yield "=>" }'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is async non-arrow function');
-	});
-	t.end();
-});
-
-test('returns true for arrow function properties', function (t) {
-	var fns = getAllFromSource([
-		'({ prop: () => {} }).prop',
-		'({ prop: async () => {} }).prop',
-		'({ prop: () => { function x() { } } }).prop',
-		'({ prop: x => { function x() { } } }).prop',
-		'({ function: () => {} }).function',
-		'({ "": () => {} })[""]'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.ok(isArrowFunction(fn), String(fn) + ' is arrow prop');
-	});
-	t.end();
-});
-
-test('returns false for non-arrow function properties', function (t) {
-	var fns = getAllFromSource([
-		'({ prop: function () {} }).prop',
-		'({ prop: async function () {} }).prop',
-		'({ prop: function* () {} }).prop',
-		'({ prop: async function* () {} }).prop',
-		'({ prop: function () { () => {} } }).prop',
-		'({ "=>": function () {} })["=>"]',
-		'({ "": function () {} })[""]'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is non-arrow prop');
-	});
-	t.end();
-});
-
-test('returns false for methods', function (t) {
-	var fns = getAllFromSource([
-		'({ method() {} }).method',
-		'({ async method() {} }).method',
-		'({ method() {} }).method',
-		'({ async *method() {} }).method',
-		'({ method() { return "=>" } }).method',
-		'({ method() { () => {} } }).method',
-		'({ "=>"() {} })["=>"]',
-		'({ ""() {} })[""]'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is method');
-	});
-	t.end();
-});
-
-test('returns false for classes', function (t) {
-	var fns = getAllFromSource([
-		'class {}',
-		'class X { }',
-		'class { "=>" }',
-		'class X { m() { return "=>" } }',
-		'class X { p = () => {} }'
-	]);
-
-	t.plan(fns.length);
-	forEach(fns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is class');
-	});
-	t.end();
-});
-
 test('https://github.com/inspect-js/is-arrow-function/issues/26', function (t) {
 	// False positive on object methods with arrow functions inside
-	var x = getFromSource('{\n		foo() {\n			return 42\n		},\n		bar() {\n			return (() => 10)()\n		},\n		buz() {\n			// if this was an arrow function, it would have included => in it\n			return 123\n		},\n	}');
+	var x = helpers.parseFromSource('{\n		foo() {\n			return 42\n		},\n		bar() {\n			return (() => 10)()\n		},\n		buz() {\n			// if this was an arrow function, it would have included => in it\n			return 123\n		},\n	}');
 	if (!x) {
 		t.skip();
 		t.end();
@@ -312,49 +140,14 @@ test('https://github.com/inspect-js/is-arrow-function/issues/26', function (t) {
 test('https://github.com/inspect-js/is-arrow-function/issues/15', function (t) {
 	// False negative for arrow function with closing parenthesis in parameter list
 
-	var fns = getAllFromSource([
+	var fns = helpers.parseAllFromSource([
 		'(a = Math.random(10)) => {}',
 		'(a = function () {\n		if (Math.random() < 0.5) {\n			return 42;\n		}\n		return "something else";\n	}) => a()'
 	]);
 
 	t.plan(fns.length);
 	forEach(fns, function (fn) {
-		t.ok(isArrowFunction(fn), String(fn) + ' is arrow');
+		t.ok(isArrowFunction(fn), String(fn) + ' is arrow function');
 	});
-	t.end();
-});
-
-test('corner cases', function (t) {
-	var arrowFns = getAllFromSource([
-		'(a = function () {}) => a()',
-		'({\n			"function name": () => { }\n		})["function name"]',
-		'({\n		 	function文: () => { }\n		}).function文',
-		'/* function */x => { }',
-		'x/* function */ => { }',
-		'/* function */() => { }',
-		'()/* function */ => { }',
-		'(/* function */) => {}'
-	]);
-
-	var nonArrowFns = getAllFromSource([
-		'function (a = () => {}) {\n		return a();\n	}',
-		'({\n			"() => {}"() {}\n		})["() => {}"]',
-		'function/* => */() { }',
-		'function name/* => */() { }',
-		'function/* => */name() { }',
-		'function(/* => */) { }',
-		'function name(/* => */) { }'
-	]);
-
-	t.plan(arrowFns.length + nonArrowFns.length);
-
-	forEach(arrowFns, function (fn) {
-		t.ok(isArrowFunction(fn), String(fn) + ' is arrow fn');
-	});
-
-	forEach(nonArrowFns, function (fn) {
-		t.notOk(isArrowFunction(fn), String(fn) + ' is not arrow fn');
-	});
-
 	t.end();
 });

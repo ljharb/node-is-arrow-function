@@ -1,3 +1,5 @@
+// @ts-check
+
 'use strict';
 
 var isCallable = require('is-callable');
@@ -29,12 +31,9 @@ module.exports = function isArrowFunction(fn) {
 	if (brace === -1 || paren === -1 || paren === firstNonSpace) {
 		return true;
 	}
-	if (quote !== -1 && quote === firstNonSpace) {
-		return false;
-	}
 
 	var puncts = [
-		arrow, brace, paren, slash
+		arrow, brace, paren, slash, quote
 	];
 	for (var i = 0; i < puncts.length; ++i) {
 		puncts[i] = puncts[i] === -1 ? Infinity : puncts[i];
@@ -42,6 +41,9 @@ module.exports = function isArrowFunction(fn) {
 	puncts.sort(function (a, b) {
 		return a - b;
 	});
+	if (puncts[0] === quote) {
+		return false;
+	}
 	if (puncts[0] === arrow) {
 		return true;
 	}
